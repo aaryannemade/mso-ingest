@@ -1,0 +1,8 @@
+.cache/
+result
+result-*
+__pycache__/
+*.py[cod]
+.venv/
+.ruff_cache/
+.direnv/
