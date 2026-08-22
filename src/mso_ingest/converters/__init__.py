@@ -2,33 +2,30 @@
 
 from __future__ import annotations
 
-import tempfile
 from collections.abc import Callable
-from pathlib import Path
+from dataclasses import replace
 
-from .. import detect, external
-from . import docx, pdf, pptx, xlsx
-from .base import Context, Result
+from .. import kinds
+from . import docx, legacy, pdf, pptx, xlsx
+from .context import Context, Result
+from .errors import UnsupportedDocument
 
 _CONVERTERS: dict[str, Callable[[Context], Result]] = {
-    detect.DOCX: docx.convert,
-    detect.PPTX: pptx.convert,
-    detect.XLSX: xlsx.convert,
-    detect.PDF: pdf.convert,
+    kinds.DOCX: docx.convert,
+    kinds.PPTX: pptx.convert,
+    kinds.XLSX: xlsx.convert,
+    kinds.PDF: pdf.convert,
 }
 
-SUPPORTED_KINDS = frozenset(_CONVERTERS) | frozenset(detect.LEGACY_TO_MODERN)
+SUPPORTED_KINDS = frozenset(_CONVERTERS) | frozenset(kinds.LEGACY_TO_MODERN)
 
-
-class UnsupportedDocument(RuntimeError):
-    pass
+__all__ = ["SUPPORTED_KINDS", "Context", "Result", "UnsupportedDocument", "convert"]
 
 
 def convert(kind: str, ctx: Context) -> Result:
     """Convert ``ctx.source``, transparently upgrading legacy binary formats."""
-    modern = detect.LEGACY_TO_MODERN.get(kind)
-    if modern is not None:
-        return _convert_legacy(kind, modern, ctx)
+    if kind in kinds.LEGACY_TO_MODERN:
+        return _convert_legacy(kind, ctx)
 
     handler = _CONVERTERS.get(kind)
     if handler is None:
@@ -36,25 +33,11 @@ def convert(kind: str, ctx: Context) -> Result:
     return handler(ctx)
 
 
-def _convert_legacy(kind: str, modern: str, ctx: Context) -> Result:
-    """Round legacy ``.doc``/``.ppt`` through LibreOffice into the modern format.
+def _convert_legacy(kind: str, ctx: Context) -> Result:
+    modern = kinds.LEGACY_TO_MODERN[kind]
 
-    Nothing else in the pipeline can read the old OLE2 formats, and the
-    round-trip is lossy enough to be worth flagging in the manifest.
-    """
-    with tempfile.TemporaryDirectory(prefix="mso-legacy-") as tmp:
-        try:
-            upgraded = external.soffice_convert(ctx.source, modern, Path(tmp))
-        except external.ToolError as exc:
-            raise UnsupportedDocument(
-                f"could not upgrade legacy {kind} via soffice: {exc}"
-            ) from exc
+    with legacy.upgraded(ctx.source, kind) as source:
+        result = _CONVERTERS[modern](replace(ctx, source=source))
 
-        result = convert(modern, Context(**{**ctx.__dict__, "source": upgraded}))
-
-    result.warn(
-        f"legacy .{kind} was converted to .{modern} by LibreOffice first; "
-        "some formatting may differ from the original",
-        degraded=True,
-    )
+    result.warn(legacy.warning(kind), degraded=True)
     return result

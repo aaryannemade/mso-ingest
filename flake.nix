@@ -84,12 +84,12 @@
 
           build-system = [ pkgs.python3Packages.setuptools ];
 
+          # markitdown propagates python-docx, python-pptx and the rest of the
+          # per-format readers itself, so they are not repeated here.
           dependencies = with pkgs.python3Packages; [
             markitdown
             openpyxl
             pdfminer-six
-            python-docx
-            python-pptx
             rich
             typer
             xlrd

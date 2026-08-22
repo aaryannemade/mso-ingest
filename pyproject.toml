@@ -11,8 +11,6 @@ dependencies = [
   "markitdown",
   "openpyxl",
   "pdfminer.six",
-  "python-docx",
-  "python-pptx",
   "rich",
   "typer",
   "xlrd",
