@@ -1,0 +1,32 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "mso-ingest"
+version = "0.1.0"
+description = "Convert Microsoft Office documents to agent-friendly markdown, CSV and PNG"
+requires-python = ">=3.11"
+dependencies = [
+  "markitdown",
+  "openpyxl",
+  "pdfminer.six",
+  "python-docx",
+  "python-pptx",
+  "rich",
+  "typer",
+  "xlrd",
+]
+
+[project.scripts]
+mso-ingest = "mso_ingest.cli:entrypoint"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.ruff]
+line-length = 100
+src = ["src"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]

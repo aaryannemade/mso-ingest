@@ -59,6 +59,7 @@
           pkgs.csvkit # in2csv / csvlook / csvjson
           pkgs.poppler-utils # pdftoppm, pdftotext
           pkgs.imagemagick # png post-processing
+          pkgs.tesseract # OCR for image-only PDF pages
         ]
         ++ pkgs.lib.optionals pkgs.stdenv.hostPlatform.isLinux [
           # LibreOffice is the only reliable way to render Office documents to
@@ -72,8 +73,54 @@
         pkgs.uv
         pkgs.nixfmt-tree
       ];
+
+      packageFor =
+        pkgs:
+        pkgs.python3Packages.buildPythonApplication {
+          pname = "mso-ingest";
+          version = "0.1.0";
+          pyproject = true;
+          src = ./.;
+
+          build-system = [ pkgs.python3Packages.setuptools ];
+
+          dependencies = with pkgs.python3Packages; [
+            markitdown
+            openpyxl
+            pdfminer-six
+            python-docx
+            python-pptx
+            rich
+            typer
+            xlrd
+          ];
+
+          nativeBuildInputs = [ pkgs.makeWrapper ];
+
+          # The converters shell out to these, so they must be on PATH at
+          # runtime regardless of what the user happens to have installed.
+          postFixup = ''
+            wrapProgram $out/bin/mso-ingest \
+              --prefix PATH : ${pkgs.lib.makeBinPath (toolsFor pkgs)}
+          '';
+
+          # No test suite yet; the import check confirms the entry point loads.
+          pythonImportsCheck = [ "mso_ingest" ];
+
+          meta = {
+            description = "Convert Microsoft Office documents to markdown, CSV and PNG";
+            mainProgram = "mso-ingest";
+          };
+        };
     in
     {
+      packages = forAllSystems (
+        { pkgs, ... }: {
+          default = packageFor pkgs;
+          mso-ingest = packageFor pkgs;
+        }
+      );
+
       devShells = forAllSystems (
         { pkgs, ... }:
         let
@@ -87,11 +134,8 @@
             packages = [ python ] ++ tools ++ devTools pkgs;
 
             shellHook = ''
-              export MSO_INGEST_ROOT="$PWD"
-              # Keep LibreOffice's profile inside the project so batch
-              # conversion never touches the user's real ~/.config.
-              export LIBREOFFICE_USER_PROFILE="$PWD/.cache/libreoffice"
-              mkdir -p "$LIBREOFFICE_USER_PROFILE"
+              # Run straight from the working tree without installing.
+              export PYTHONPATH="$PWD/src''${PYTHONPATH:+:$PYTHONPATH}"
 
               echo "mso-ingest dev shell"
               echo "  python     $(python3 --version 2>&1 | cut -d' ' -f2)"
